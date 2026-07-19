@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useDiagramStore, rankOf } from '../../store/useDiagramStore.js';
 import NodeCard from './NodeCard.jsx';
 
@@ -163,27 +163,68 @@ export default function SvgCanvas() {
   }, []);
 
   const hiddenTypes = views.find(v => v.id === activeViewId)?.hiddenTypes || [];
-  const nodeList = Object.values(nodes).filter(n => !hiddenTypes.includes(n.type)).sort((a, b) => {
-    const da = useDiagramStore.getState().getDepth(a.id);
-    const db = useDiagramStore.getState().getDepth(b.id);
-    if (da !== db) return da - db;
-    // Order sensitivity: within the same nesting depth, always draw in the
-    // same logical order (e.g. a Hypervisor sits below the VMs draped over
-    // it) rather than an arbitrary/insertion-order stacking.
-    return rankOf(a.type) - rankOf(b.type);
-  });
 
-  // VLAN filter: compute highlighted set
-  let highlightSet = null;
-  if (vlanFilter) {
-    highlightSet = new Set();
+  // Depth used to be recomputed per-comparison inside the sort (getDepth
+  // walks the parent chain from scratch each call), so an N-node sort did
+  // O(N log N) chain-walks on every render — including every drag-move
+  // frame. Compute each node's depth once in a single O(n) pass instead.
+  const nodeList = useMemo(() => {
+    const depthOf = new Map();
+    // Depth of a node = 1 + depth of its parent. Walk up from each node,
+    // stopping early whenever we hit an already-memoized ancestor, then
+    // assign depths back down the walked chain. Every node is visited a
+    // constant number of times total (not per-comparison), so this is O(n)
+    // for the whole node set instead of O(n log n) chain-walks in the sort.
+    const depthFor = (n) => {
+      if (depthOf.has(n.id)) return depthOf.get(n.id);
+      const chain = [];
+      let cur = n;
+      while (cur && !depthOf.has(cur.id)) {
+        chain.push(cur.id);
+        cur = cur.parentId != null ? nodes[cur.parentId] : null;
+      }
+      let d = cur ? depthOf.get(cur.id) : -1; // -1 so the root of the chain gets depth 0
+      for (let i = chain.length - 1; i >= 0; i--) {
+        d += 1;
+        depthOf.set(chain[i], d);
+      }
+      return depthOf.get(n.id);
+    };
+    const list = Object.values(nodes).filter(n => !hiddenTypes.includes(n.type));
+    list.forEach(depthFor);
+    return list.sort((a, b) => {
+      const da = depthOf.get(a.id) || 0;
+      const db = depthOf.get(b.id) || 0;
+      if (da !== db) return da - db;
+      return rankOf(a.type) - rankOf(b.type);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes, hiddenTypes.join(',')]);
+
+  // VLAN filter: compute highlighted set (memoized — was recomputed every render)
+  const highlightSet = useMemo(() => {
+    if (!vlanFilter) return null;
+    const set = new Set();
     Object.values(nodes).forEach(n => {
       if (n.type === 'network' && n.fields.vlanId === vlanFilter) {
-        highlightSet.add(n.id);
-        getDescendantIds(n.id).forEach(id => highlightSet.add(id));
+        set.add(n.id);
+        getDescendantIds(n.id).forEach(id => set.add(id));
       }
     });
-  }
+    return set;
+  }, [nodes, vlanFilter, getDescendantIds]);
+
+  // Port conflicts used to be computed fresh inside *every* NodeCard's own
+  // render (an O(n) scan per card = O(n^2) total, redone on every drag
+  // frame since it wasn't memoized). Compute it once here and hand each
+  // card a plain boolean.
+  const portConflicts = useDiagramStore(s => s.getPortConflicts);
+  const conflictedIds = useMemo(() => {
+    const ids = new Set();
+    portConflicts().forEach(pc => pc.ids.forEach(id => ids.add(id)));
+    return ids;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes]);
 
   const pendingFromNode = pendingConnectFrom ? nodes[pendingConnectFrom] : null;
 
@@ -242,6 +283,7 @@ export default function SvgCanvas() {
             node={node}
             isDropTarget={false}
             dimmed={highlightSet ? !highlightSet.has(node.id) : false}
+            conflicted={conflictedIds.has(node.id)}
             onContextMenu={(e, id) => openContextMenu(e.clientX, e.clientY, id)}
           />
         ))}

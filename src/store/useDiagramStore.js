@@ -458,13 +458,23 @@ export const useDiagramStore = create((set, get) => ({
 
   getDescendantIds: (id) => {
     const { nodes } = get();
+    // Build the parentId -> children index once (O(n)) instead of rescanning
+    // every node for every id popped off the BFS stack. The old version was
+    // O(n) per stack-pop (so O(n * subtree size) overall) — expensive for
+    // deep containers on every drag/delete/clone. This is always O(n) total.
+    const childrenOf = new Map();
+    Object.values(nodes).forEach(n => {
+      if (n.parentId != null) {
+        if (!childrenOf.has(n.parentId)) childrenOf.set(n.parentId, []);
+        childrenOf.get(n.parentId).push(n.id);
+      }
+    });
     const result = [];
     const stack = [id];
     while (stack.length) {
       const cur = stack.pop();
-      Object.values(nodes).forEach(n => {
-        if (n.parentId === cur) { result.push(n.id); stack.push(n.id); }
-      });
+      const kids = childrenOf.get(cur);
+      if (kids) kids.forEach(k => { result.push(k); stack.push(k); });
     }
     return result;
   },

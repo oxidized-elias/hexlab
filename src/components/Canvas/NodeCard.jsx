@@ -46,7 +46,7 @@ function infoFor(node) {
 }
 
 
-export default function NodeCard({ node, isDropTarget, dimmed, onContextMenu }) {
+export default function NodeCard({ node, isDropTarget, dimmed, conflicted, onContextMenu }) {
   const selectedIds = useDiagramStore(s => s.selectedIds);
   const select = useDiagramStore(s => s.select);
   const setNodePosition = useDiagramStore(s => s.setNodePosition);
@@ -61,13 +61,6 @@ export default function NodeCard({ node, isDropTarget, dimmed, onContextMenu }) 
   const linkApplications = useDiagramStore(s => s.linkApplications);
   const updateNode = useDiagramStore(s => s.updateNode);
   const openIconPicker = useDiagramStore(s => s.openIconPicker);
-  // Select the stable function reference and call it during render — selecting
-  // `s => s.getPortConflicts()` directly returns a brand-new array every render,
-  // which breaks useSyncExternalStore's snapshot equality check and causes an
-  // infinite render loop ("Maximum update depth exceeded"). Since NodeCard
-  // renders once per node, this was the root cause of the black-screen-on-load bug.
-  const getPortConflicts = useDiagramStore(s => s.getPortConflicts);
-  const portConflicts = getPortConflicts();
   const gridSnapEnabled = useDiagramStore(s => s.gridSnapEnabled);
   const bringToFront = useDiagramStore(s => s.bringToFront);
   const snapshotForUndo = useDiagramStore(s => s.snapshotForUndo);
@@ -79,7 +72,6 @@ export default function NodeCard({ node, isDropTarget, dimmed, onContextMenu }) 
   const selected = selectedIds.includes(node.id);
   const isContainer = def.container;
 
-  const conflicted = portConflicts.some(pc => pc.ids.includes(node.id));
   const offline = !!node.telemetry.endpoint && node.telemetry.status === 'offline';
 
   const handlePointerDown = (e) => {

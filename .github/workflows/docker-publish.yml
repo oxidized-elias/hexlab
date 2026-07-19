@@ -51,8 +51,8 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ id.meta.outputs.tags }}
-          labels: ${{ id.meta.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}    # Changed 'id' to 'steps'
+          labels: ${{ steps.meta.outputs.labels }}  # Changed 'id' to 'steps'
           # Leverages GitHub Actions cache to speed up subsequent builds
           cache-from: type=gha
           cache-to: type=gha,mode=max
