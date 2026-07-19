@@ -51,7 +51,7 @@ Other scripts:
 | --- | --- |
 | `npm run dev` | Frontend & Server Start|
 | `npm run server` | Storage server Start |
-| `dev:vite-only`  | Frontend Server Start
+| `npm run dev:vite-only` | Frontend Server Start |
 | `npm run build` | Production build to `dist/` |
 | `npm run preview` | Preview the production build |
 | `npm run lint` | Run oxlint |
@@ -61,11 +61,10 @@ Other scripts:
 Projects are persisted to disk by the storage server under `UserData/` at the project root (`UserData/index.json` for the project list, `UserData/projects/<id>.json` for each diagram). This folder is created automatically on first run and is git-ignored.
 
 For a production deploy, run `npm run build` followed by `npm run server` — the storage server also serves the built frontend, so it's a single process.
-
 <br>
 
 ## Credits
 * [RaidOwl](https://github.com/RaidOwl) for creating Homelab-Hub
 * [oxidized-elias](https://github.com/oxidized-elias) for creating HexLab _idea_
 * [vecteezy icons](https://www.vecteezy.com/vector-art/40259338-honey-comb-icon-vector-design-template) for the icon
-* [Claude Sonnet 5](claude.ai) "Lead" Programer
+* [Claude Sonnet 5](claude.ai) "Lead" Programmer
