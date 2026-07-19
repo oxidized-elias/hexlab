@@ -27,6 +27,10 @@ Dependencies:
 ```bash
 docker run -d --name hexlab -p 5173:5173 -p 4173:4173 ghcr.io/oxidized-elias/hexlab:latest
 ```
+If running the application with a domain:
+```bash
+docker run -d --name hexlab -e ALLOWED_HOSTS=[YOUR DOMAIN HERE] -p 5173:5173 -p 4173:4173 ghcr.io/oxidized-elias/hexlab:latest
+```
 
 ### Dockerfile:
 Dependencies:
