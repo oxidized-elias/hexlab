@@ -20,11 +20,11 @@
 * Multiple projects, each with its own saved diagram
 
 ## Getting Started
-### Docker Hub (Recommended):
+### GitHub Container Registry (Recommended):
 Dependencies:
 * Docker
 ```bash
-docker run -d --name hexlab -p 5173:5173 -p 4173:4173 oxidizedelias/hexlab:latest
+docker run -d --name hexlab -p 5173:5173 -p 4173:4173 ghcr.io/oxidized-elias/hexlab:latest
 ```
 
 ### Dockerfile:
