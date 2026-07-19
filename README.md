@@ -31,8 +31,10 @@ docker run -d --name hexlab -p 5173:5173 -p 4173:4173 ghcr.io/oxidized-elias/hex
 ### Dockerfile:
 Dependencies:
 * Docker
+* git
 ```bash
-docker build -t oxidized-elias/hexlab_git:latest . # Build Image
+git clone https://github.com/oxidized-elias/hexlab/ cd hexlab # Clone Repository
+docker build -t oxidized-elias/hexlab_git:latest .  # Build Image
 docker run -d -p 5173:5173 --name hexlab oxidized-elias/hexlab_git:latest
 ```
 
@@ -41,6 +43,7 @@ Dependencies:
 * Node.js
 * npm
 ```bash
+git clone https://github.com/oxidized-elias/hexlab/ && cd hexlab # Clone Repository
 npm install    # Installs dependencies 
 npm run dev    # Starts the Front end
 npm run server # Starts the Server Storage
