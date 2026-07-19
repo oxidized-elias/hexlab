@@ -6,7 +6,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: '0.0.0.0',
-    port: 5173,      
+    port: 5173,  
+    allowedHosts: allowedHosts,
     // The storage server (server/index.cjs, `npm run server`) holds project
     // data on disk. In dev, proxy /api/* there so the Vite dev server and
     // the storage server can run side by side on different ports.
