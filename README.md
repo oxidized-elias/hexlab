@@ -33,7 +33,7 @@ Dependencies:
 * Docker
 * git
 ```bash
-git clone https://github.com/oxidized-elias/hexlab/ cd hexlab # Clone Repository
+git clone https://github.com/oxidized-elias/hexlab/ && cd hexlab # Clone Repository
 docker build -t oxidized-elias/hexlab_git:latest .  # Build Image
 docker run -d -p 5173:5173 --name hexlab oxidized-elias/hexlab_git:latest
 ```
