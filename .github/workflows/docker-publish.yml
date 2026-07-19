@@ -1,14 +1,13 @@
 name: Build and Publish Docker Image
 
-# Trigger the workflow on pushes to the main branch
 on:
   push:
     branches: [ "main" ]
+  schedule:
+    - cron: '0 0 * * 0'
 
-# Define environment variables
 env:
   REGISTRY: ghcr.io
-  # This uses your repository name in lowercase as the image name
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
@@ -16,43 +15,37 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write # Crucial for pushing to GHCR
+      packages: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Set up QEMU for multi-architecture builds if needed later
       - name: Set up Docker Buildx
-        uses: actions/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v3
 
-      # Log into the GitHub Container Registry
       - name: Log in to the Container Registry
-        uses: actions/login-action@v3
+        uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Extract metadata (tags, labels) for Docker
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          # Tags the image with 'latest' and the git commit SHA
           tags: |
             type=raw,value=latest
             type=sha
 
-      # Build and push the Docker image
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ${{ steps.meta.outputs.tags }}    # Changed 'id' to 'steps'
-          labels: ${{ steps.meta.outputs.labels }}  # Changed 'id' to 'steps'
-          # Leverages GitHub Actions cache to speed up subsequent builds
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
