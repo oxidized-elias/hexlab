@@ -15,6 +15,8 @@ export default function ProjectSettingsModal() {
   const toggleMinimalUi = useDiagramStore(s => s.toggleMinimalUi);
   const gridSnapEnabled = useDiagramStore(s => s.gridSnapEnabled);
   const toggleGridSnap = useDiagramStore(s => s.toggleGridSnap);
+  const confidentialMode = useDiagramStore(s => s.confidentialMode);
+  const toggleConfidentialMode = useDiagramStore(s => s.toggleConfidentialMode);
   const projects = useDiagramStore(s => s.projects);
   const activeProjectId = useDiagramStore(s => s.activeProjectId);
   const active = projects.find(p => p.id === activeProjectId);
@@ -48,6 +50,10 @@ export default function ProjectSettingsModal() {
           <div className="toggle-row">
             <span className="toggle-row-label">Grid Snapping</span>
             <div className={`mini-switch ${gridSnapEnabled ? 'on' : ''}`} onClick={toggleGridSnap}><div className="knob" /></div>
+          </div>
+          <div className="toggle-row" title="Hides external hostnames/IPs, internal IPs, and generated Docker Compose/K8s output across the canvas and inspector — useful before a screen-share or screenshot.">
+            <span className="toggle-row-label">Confidentiality Mode</span>
+            <div className={`mini-switch ${confidentialMode ? 'on' : ''}`} onClick={toggleConfidentialMode}><div className="knob" /></div>
           </div>
         </div>
         <div className="modal-footer">

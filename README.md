@@ -19,6 +19,7 @@
 * Compose / Pod YAML import and manifest generation
 * Live telemetry polling for nodes with a configured endpoint
 * Multiple projects, each with its own saved diagram
+* Hiding Information for exports, streams, or recordings
 
 ## Getting Started
 ### GitHub Container Registry (Recommended):

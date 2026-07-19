@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDiagramStore, TYPE_DEFAULTS } from '../../store/useDiagramStore.js';
 import { iconGlyphFor, resolveIcon } from '../../utils/icons.js';
+import { maskField } from '../../utils/confidential.js';
 
 // First "sub" line — a short type-level label.
 function subtitleFor(node) {
@@ -25,19 +26,19 @@ function subtitleFor(node) {
 
 // Second "info" line — distinct detail, so storage/directory (and others)
 // don't just repeat the subtype twice.
-function infoFor(node) {
+function infoFor(node, confidentialMode) {
   const f = node.fields || {};
   switch (node.type) {
-    case 'device': return f.ip || 'No IP set';
-    case 'firewall': return f.wanIp || f.lanCidr || 'No WAN/LAN set';
-    case 'network': return f.gateway ? `gw ${f.gateway}` : 'No gateway set';
+    case 'device': return maskField('device', 'ip', f.ip, confidentialMode) || 'No IP set';
+    case 'firewall': return maskField('firewall', 'wanIp', f.wanIp, confidentialMode) || maskField('firewall', 'lanCidr', f.lanCidr, confidentialMode) || 'No WAN/LAN set';
+    case 'network': return f.gateway ? `gw ${maskField('network', 'gateway', f.gateway, confidentialMode)}` : 'No gateway set';
     case 'hypervisor': return f.totalCpu || f.totalRam ? `${f.totalCpu || '—'} / ${f.totalRam || '—'}` : 'No specs set';
-    case 'vm': return f.ip || (f.vCpu || f.vRam ? `${f.vCpu || '—'} / ${f.vRam || '—'}` : 'No IP set');
-    case 'k8s': return f.apiEndpoint || 'No API endpoint set';
+    case 'vm': return maskField('vm', 'ip', f.ip, confidentialMode) || (f.vCpu || f.vRam ? `${f.vCpu || '—'} / ${f.vRam || '—'}` : 'No IP set');
+    case 'k8s': return maskField('k8s', 'apiEndpoint', f.apiEndpoint, confidentialMode) || 'No API endpoint set';
     case 'docker': return f.env ? 'Env configured' : 'No env vars';
     case 'storage': return f.capacity ? (f.subtype === 'Storage Pool' ? `${f.capacity} · ${f.raidLevel || 'N/A'}` : f.capacity) : (f.mountPath || 'No capacity set');
     case 'storagepool': return f.capacity ? `${f.capacity} · ${f.raidLevel || 'N/A'}` : (f.mountPath || 'No capacity set');
-    case 'internet': return f.publicIp || f.wanSpeed || 'No WAN info set';
+    case 'internet': return maskField('internet', 'publicIp', f.publicIp, confidentialMode) || f.wanSpeed || 'No WAN info set';
     case 'directory': return f.subtype === 'Symlinked Directory' ? (f.symlinkTarget || 'No symlink target') : (f.isBackupJob ? `Backup → ${f.backupTarget || '—'}` : 'Local directory');
     case 'application': return f.status || 'Unknown status';
     case 'group': return `${f.mode === 'functional' ? 'Functional' : 'Aesthetic'} group`;
@@ -47,6 +48,8 @@ function infoFor(node) {
 
 
 export default function NodeCard({ node, isDropTarget, dimmed, conflicted, onContextMenu }) {
+  const nodes = useDiagramStore(s => s.nodes);
+  const confidentialMode = useDiagramStore(s => s.confidentialMode);
   const selectedIds = useDiagramStore(s => s.selectedIds);
   const select = useDiagramStore(s => s.select);
   const setNodePosition = useDiagramStore(s => s.setNodePosition);
@@ -216,6 +219,18 @@ export default function NodeCard({ node, isDropTarget, dimmed, conflicted, onCon
   const ram = node.telemetry.ram;
   const disk = node.telemetry.disk;
 
+  // A node should read as hidden if it was explicitly hidden OR any
+  // ancestor (parent, grandparent, ...) was hidden — hiding a section
+  // should hide everything nested inside it too, not just the section
+  // header itself.
+  let ancestorHidden = false;
+  let cur = node.parentId ? nodes[node.parentId] : null;
+  while (cur) {
+    if (cur.hidden) { ancestorHidden = true; break; }
+    cur = cur.parentId ? nodes[cur.parentId] : null;
+  }
+  const effectivelyHidden = node.hidden || ancestorHidden;
+
   const classes = [
     'node-card',
     isContainer ? 'container-type' : '',
@@ -223,7 +238,7 @@ export default function NodeCard({ node, isDropTarget, dimmed, conflicted, onCon
     isDropTarget ? 'drop-target' : '',
     dimmed ? 'dimmed' : '',
     offline ? 'alert' : '',
-    node.hidden ? 'node-hidden' : '',
+    effectivelyHidden ? 'node-hidden' : '',
   ].filter(Boolean).join(' ');
 
   // Stacking/click priority: smaller items must always win over larger
@@ -249,11 +264,14 @@ export default function NodeCard({ node, isDropTarget, dimmed, conflicted, onCon
       onPointerDown={handlePointerDown}
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu(e, node.id); }}
       onDoubleClick={(e) => { e.stopPropagation(); select(node.id); }}
-      title={`${node.name} (${node.type})\n${subtitleFor(node)}\n${infoFor(node)}`}
+      title={`${node.name} (${node.type})\n${subtitleFor(node)}\n${infoFor(node, confidentialMode)}`}
     >
       {conflicted && <div className="node-badge-corner" title="Port conflict">!</div>}
-      {node.hidden && (
-        <div className="node-hidden-overlay" title="Hidden — right-click to unhide">
+      {effectivelyHidden && (
+        <div
+          className="node-hidden-overlay"
+          title={node.hidden ? 'Hidden — right-click to unhide' : 'Hidden — a parent section is hidden'}
+        >
           <svg width="22" height="22" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none">
             <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" strokeLinecap="round" strokeLinejoin="round" />
             <circle cx="12" cy="12" r="3" strokeLinecap="round" strokeLinejoin="round" />
@@ -285,7 +303,7 @@ export default function NodeCard({ node, isDropTarget, dimmed, conflicted, onCon
       {!isContainer && (
         <div className="node-body">
           <div className="kv"><span>sub</span><b>{subtitleFor(node)}</b></div>
-          <div className="kv"><span>info</span><b>{infoFor(node)}</b></div>
+          <div className="kv"><span>info</span><b>{infoFor(node, confidentialMode)}</b></div>
           {node.telemetry.endpoint && (
             <>
               <div className="kv"><span>cpu</span><b>{cpu != null ? `${cpu}%` : '—'}</b></div>

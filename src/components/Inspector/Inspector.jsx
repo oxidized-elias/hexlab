@@ -3,6 +3,7 @@ import { useDiagramStore, TYPE_DEFAULTS } from '../../store/useDiagramStore.js';
 import { parseCompose } from '../../utils/composeParser.js';
 import { generateDockerCompose, generateK8sManifests, generateNginx, generateTraefik, generateDnsRewrite } from '../../utils/generators.js';
 import ColorPickerPopover from '../Common/ColorPickerPopover.jsx';
+import { MASK, isSensitiveField } from '../../utils/confidential.js';
 
 export function Field({ label, children }) {
   return <div className="field-group"><label className="field-label">{label}</label>{children}</div>;
@@ -19,17 +20,25 @@ function urlFor(value) {
 // An IP/URL text input with a small button that opens the current value in
 // a new tab (rather than making the whole field clickable, which would
 // conflict with editing it).
-function IpField({ label, value, onChange, placeholder }) {
-  const url = urlFor(value);
+function IpField({ label, value, onChange, placeholder, masked }) {
+  const displayValue = masked ? MASK : value;
+  const url = masked ? null : urlFor(value);
   return (
     <Field label={label}>
       <div className="ip-field-row">
-        <input className="field-input mono" value={value} onChange={onChange} placeholder={placeholder} />
+        <input
+          className="field-input mono"
+          value={displayValue}
+          onChange={onChange}
+          placeholder={placeholder}
+          disabled={masked}
+          title={masked ? 'Hidden by Confidentiality Mode' : undefined}
+        />
         <button
           type="button"
           className="btn icon-only small"
-          title={url ? `Open ${url} in a new tab` : 'Enter a value first'}
-          disabled={!url}
+          title={masked ? 'Hidden by Confidentiality Mode' : (url ? `Open ${url} in a new tab` : 'Enter a value first')}
+          disabled={masked || !url}
           onClick={() => url && window.open(url, '_blank', 'noopener,noreferrer')}
         >↗</button>
       </div>
@@ -54,8 +63,10 @@ export default function Inspector() {
   const diagnosticsDismissed = useDiagramStore(s => s.diagnosticsDismissed);
   const dismissDiagnostics = useDiagramStore(s => s.dismissDiagnostics);
   const reopenDiagnostics = useDiagramStore(s => s.reopenDiagnostics);
+  const confidentialMode = useDiagramStore(s => s.confidentialMode);
   const [composeText, setComposeText] = useState('');
   const [genOutput, setGenOutput] = useState(null);
+  const [genKind, setGenKind] = useState(null);
 
   if (!node) {
     if (diagnosticsDismissed) {
@@ -85,7 +96,7 @@ export default function Inspector() {
                 {ipam.map((e, i) => (
                   <div key={i} className="node-body kv mono" style={{ background: 'var(--bg-panel-alt)', padding: '5px 8px', borderRadius: 3 }}>
                     <span>{e.name} <span style={{ color: 'var(--text-dim)' }}>({e.role})</span></span>
-                    <b>{e.ip}</b>
+                    <b>{confidentialMode ? MASK : e.ip}</b>
                   </div>
                 ))}
               </div>
@@ -138,6 +149,7 @@ export default function Inspector() {
     if (kind === 'traefik') out = generateTraefik(node);
     if (kind === 'dns') out = generateDnsRewrite(node);
     setGenOutput(out);
+    setGenKind(kind);
   };
 
   return (
@@ -170,7 +182,7 @@ export default function Inspector() {
 
         {/* ---- Type specific fields ---- */}
         <div className="inspector-section-title">Configuration</div>
-        <TypeFields node={node} setF={setF} />
+        <TypeFields node={node} setF={setF} confidentialMode={confidentialMode} />
 
         {/* ---- Telemetry ---- */}
         <div className="inspector-section-title">Live Telemetry</div>
@@ -181,9 +193,16 @@ export default function Inspector() {
           <>
             <div className="inspector-section-title">Compose / Pod YAML Import</div>
             <Field label="Paste docker-compose.yml or pod spec">
-              <textarea className="field-textarea" value={composeText} onChange={e => setComposeText(e.target.value)} placeholder={'image: myapp:latest\nports:\n  - "8080:80"\nvolumes:\n  - /data:/app/data\nenvironment:\n  - KEY=value'} />
+              <textarea
+                className="field-textarea"
+                value={confidentialMode ? MASK : composeText}
+                onChange={e => setComposeText(e.target.value)}
+                placeholder={'image: myapp:latest\nports:\n  - "8080:80"\nvolumes:\n  - /data:/app/data\nenvironment:\n  - KEY=value'}
+                disabled={confidentialMode}
+                title={confidentialMode ? 'Hidden by Confidentiality Mode' : undefined}
+              />
             </Field>
-            <button className="btn small" onClick={runParseCompose}>Parse & Auto-populate</button>
+            <button className="btn small" disabled={confidentialMode} onClick={runParseCompose}>Parse & Auto-populate</button>
           </>
         )}
 
@@ -213,8 +232,19 @@ export default function Inspector() {
 
         {genOutput && (
           <>
-            <div className="output-block">{genOutput}</div>
-            <button className="btn small" onClick={() => { navigator.clipboard?.writeText(genOutput); showToast('Copied to clipboard'); }}>Copy</button>
+            {confidentialMode && (genKind === 'compose' || genKind === 'k8s') ? (
+              <div className="output-block confidential-block" title="Hidden by Confidentiality Mode">
+                {MASK}
+                {'\n'}(Docker Compose / manifest output hidden by Confidentiality Mode)
+              </div>
+            ) : (
+              <div className="output-block">{genOutput}</div>
+            )}
+            <button
+              className="btn small"
+              disabled={confidentialMode && (genKind === 'compose' || genKind === 'k8s')}
+              onClick={() => { navigator.clipboard?.writeText(genOutput); showToast('Copied to clipboard'); }}
+            >Copy</button>
           </>
         )}
 
@@ -229,8 +259,10 @@ export default function Inspector() {
 }
 
 
-export function TypeFields({ node, setF }) {
+export function TypeFields({ node, setF, confidentialMode }) {
   const f = node.fields;
+  const locked = (key) => confidentialMode && isSensitiveField(node.type, key);
+  const mv = (key, value) => locked(key) ? MASK : value;
   switch (node.type) {
     case 'group':
       return (
@@ -268,7 +300,7 @@ export function TypeFields({ node, setF }) {
             <Field label="RAM"><input className="field-input" value={f.ram} onChange={e => setF({ ram: e.target.value })} /></Field>
           </div>
           <div className="field-row">
-            <IpField label="IP Address" value={f.ip} onChange={e => setF({ ip: e.target.value })} />
+            <IpField label="IP Address" value={f.ip} onChange={e => setF({ ip: e.target.value })} masked={locked('ip')} />
             <Field label="Serial Number"><input className="field-input" value={f.serial} onChange={e => setF({ serial: e.target.value })} /></Field>
           </div>
           <Field label="Location / Rack ID"><input className="field-input" value={f.rackId} onChange={e => setF({ rackId: e.target.value })} /></Field>
@@ -277,14 +309,14 @@ export function TypeFields({ node, setF }) {
     case 'network':
       return (
         <>
-          <Field label="IP CIDR Block"><input className="field-input mono" value={f.cidr} onChange={e => setF({ cidr: e.target.value })} /></Field>
+          <Field label="IP CIDR Block"><input className="field-input mono" value={mv('cidr', f.cidr)} onChange={e => setF({ cidr: e.target.value })} disabled={locked('cidr')} title={locked('cidr') ? 'Hidden by Confidentiality Mode' : undefined} /></Field>
           <div className="field-row">
-            <Field label="DHCP Start"><input className="field-input mono" value={f.dhcpStart} onChange={e => setF({ dhcpStart: e.target.value })} /></Field>
-            <Field label="DHCP End"><input className="field-input mono" value={f.dhcpEnd} onChange={e => setF({ dhcpEnd: e.target.value })} /></Field>
+            <Field label="DHCP Start"><input className="field-input mono" value={mv('dhcpStart', f.dhcpStart)} onChange={e => setF({ dhcpStart: e.target.value })} disabled={locked('dhcpStart')} title={locked('dhcpStart') ? 'Hidden by Confidentiality Mode' : undefined} /></Field>
+            <Field label="DHCP End"><input className="field-input mono" value={mv('dhcpEnd', f.dhcpEnd)} onChange={e => setF({ dhcpEnd: e.target.value })} disabled={locked('dhcpEnd')} title={locked('dhcpEnd') ? 'Hidden by Confidentiality Mode' : undefined} /></Field>
           </div>
           <div className="field-row">
             <Field label="DNS Server"><input className="field-input mono" value={f.dns} onChange={e => setF({ dns: e.target.value })} /></Field>
-            <Field label="Gateway"><input className="field-input mono" value={f.gateway} onChange={e => setF({ gateway: e.target.value })} /></Field>
+            <Field label="Gateway"><input className="field-input mono" value={mv('gateway', f.gateway)} onChange={e => setF({ gateway: e.target.value })} disabled={locked('gateway')} title={locked('gateway') ? 'Hidden by Confidentiality Mode' : undefined} /></Field>
           </div>
           <Field label="VLAN ID"><input className="field-input" value={f.vlanId} onChange={e => setF({ vlanId: e.target.value })} /></Field>
         </>
@@ -321,7 +353,7 @@ export function TypeFields({ node, setF }) {
             <Field label="vRAM"><input className="field-input" value={f.vRam} onChange={e => setF({ vRam: e.target.value })} /></Field>
           </div>
           <div className="field-row">
-            <IpField label="IP Address" value={f.ip} onChange={e => setF({ ip: e.target.value })} />
+            <IpField label="IP Address" value={f.ip} onChange={e => setF({ ip: e.target.value })} masked={locked('ip')} />
             <Field label="Disk Size"><input className="field-input" value={f.diskSize} onChange={e => setF({ diskSize: e.target.value })} placeholder="128GB" /></Field>
           </div>
           <Field label="Mapped Host Ports (comma sep)"><input className="field-input" value={f.hostPorts} onChange={e => setF({ hostPorts: e.target.value })} placeholder="8080:80, 443:443" /></Field>
@@ -336,8 +368,8 @@ export function TypeFields({ node, setF }) {
             </select>
           </Field>
           <Field label="Namespace"><input className="field-input" value={f.namespace} onChange={e => setF({ namespace: e.target.value })} /></Field>
-          <Field label="Pod CIDR"><input className="field-input mono" value={f.podCidr} onChange={e => setF({ podCidr: e.target.value })} /></Field>
-          <Field label="API Server Endpoint"><input className="field-input mono" value={f.apiEndpoint} onChange={e => setF({ apiEndpoint: e.target.value })} /></Field>
+          <Field label="Pod CIDR"><input className="field-input mono" value={mv('podCidr', f.podCidr)} onChange={e => setF({ podCidr: e.target.value })} disabled={locked('podCidr')} title={locked('podCidr') ? 'Hidden by Confidentiality Mode' : undefined} /></Field>
+          <Field label="API Server Endpoint"><input className="field-input mono" value={mv('apiEndpoint', f.apiEndpoint)} onChange={e => setF({ apiEndpoint: e.target.value })} disabled={locked('apiEndpoint')} title={locked('apiEndpoint') ? 'Hidden by Confidentiality Mode' : undefined} /></Field>
           <div className="field-row">
             <Field label="CPU Limit"><input className="field-input" value={f.cpuLimit} onChange={e => setF({ cpuLimit: e.target.value })} /></Field>
             <Field label="Memory Limit"><input className="field-input" value={f.memLimit} onChange={e => setF({ memLimit: e.target.value })} /></Field>
@@ -415,8 +447,8 @@ export function TypeFields({ node, setF }) {
             </Field>
           )}
           <div className="field-row">
-            <IpField label="WAN IP" value={f.wanIp} onChange={e => setF({ wanIp: e.target.value })} />
-            <Field label="LAN CIDR"><input className="field-input mono" value={f.lanCidr} onChange={e => setF({ lanCidr: e.target.value })} placeholder="192.168.1.0/24" /></Field>
+            <IpField label="WAN IP" value={f.wanIp} onChange={e => setF({ wanIp: e.target.value })} masked={locked('wanIp')} />
+            <Field label="LAN CIDR"><input className="field-input mono" value={mv('lanCidr', f.lanCidr)} onChange={e => setF({ lanCidr: e.target.value })} placeholder="192.168.1.0/24" disabled={locked('lanCidr')} title={locked('lanCidr') ? 'Hidden by Confidentiality Mode' : undefined} /></Field>
           </div>
           <Field label="Rules Summary"><textarea className="field-textarea" value={f.rulesSummary} onChange={e => setF({ rulesSummary: e.target.value })} placeholder={'Allow 443 -> reverse proxy\nBlock all inbound except VPN'} /></Field>
         </>
@@ -426,7 +458,7 @@ export function TypeFields({ node, setF }) {
         <>
           <Field label="ISP"><input className="field-input" value={f.isp} onChange={e => setF({ isp: e.target.value })} placeholder="Comcast, AT&T, …" /></Field>
           <div className="field-row">
-            <IpField label="Public IP" value={f.publicIp} onChange={e => setF({ publicIp: e.target.value })} />
+            <IpField label="Public IP" value={f.publicIp} onChange={e => setF({ publicIp: e.target.value })} masked={locked('publicIp')} />
             <Field label="WAN Speed"><input className="field-input" value={f.wanSpeed} onChange={e => setF({ wanSpeed: e.target.value })} placeholder="1000/50 Mbps" /></Field>
           </div>
         </>
@@ -458,15 +490,15 @@ export function TypeFields({ node, setF }) {
             <Field label="Image / Tag"><input className="field-input" value={f.image} onChange={e => setF({ image: e.target.value })} placeholder="lscr.io/linuxserver/app:latest" /></Field>
             <Field label="Port(s)"><input className="field-input" value={f.port} onChange={e => setF({ port: e.target.value })} placeholder="8080:80" /></Field>
           </div>
-          <IpField label="External URL" value={f.externalUrl} onChange={e => setF({ externalUrl: e.target.value })} placeholder="https://app.example.com" />
+          <IpField label="External URL" value={f.externalUrl} onChange={e => setF({ externalUrl: e.target.value })} placeholder="https://app.example.com" masked={locked('externalUrl')} />
           <Field label="Status">
             <select className="field-select" value={f.status} onChange={e => setF({ status: e.target.value })}>
               <option>Active</option><option>Offline</option><option>Updating</option>
             </select>
           </Field>
-          <Field label="Uptime Monitor URL"><input className="field-input" value={f.monitorUrl} onChange={e => setF({ monitorUrl: e.target.value })} /></Field>
+          <Field label="Uptime Monitor URL"><input className="field-input" value={mv('monitorUrl', f.monitorUrl)} onChange={e => setF({ monitorUrl: e.target.value })} disabled={locked('monitorUrl')} title={locked('monitorUrl') ? 'Hidden by Confidentiality Mode' : undefined} /></Field>
           <Field label="Labels / Tags"><input className="field-input" value={f.tags} onChange={e => setF({ tags: e.target.value })} placeholder="media, arr-stack" /></Field>
-          <Field label="Documentation URL"><input className="field-input" value={f.docsUrl} onChange={e => setF({ docsUrl: e.target.value })} /></Field>
+          <Field label="Documentation URL"><input className="field-input" value={mv('docsUrl', f.docsUrl)} onChange={e => setF({ docsUrl: e.target.value })} disabled={locked('docsUrl')} title={locked('docsUrl') ? 'Hidden by Confidentiality Mode' : undefined} /></Field>
         </>
       );
     default:

@@ -244,6 +244,14 @@ export const useDiagramStore = create((set, get) => ({
   // duplicating anything.
   views: [{ id: 'default', name: 'All', hiddenTypes: [] }],
   activeViewId: 'default',
+
+  // Confidentiality Mode — display-only redaction of external
+  // hostnames/IPs, internal IPs, and generated Docker Compose/K8s output.
+  // Not persisted with the project file — it's a per-session screen-share
+  // toggle, not a data change.
+  confidentialMode: false,
+  toggleConfidentialMode: () => set(s => ({ confidentialMode: !s.confidentialMode })),
+
   createView: (name) => {
     const id = genId('view');
     set(s => ({ views: [...s.views, { id, name: name || 'New View', hiddenTypes: [] }], activeViewId: id }));
