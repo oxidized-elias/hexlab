@@ -4,7 +4,8 @@
 <h1 align="center">HexLab</h1>
 <p align="center">
   A Network / Device Visualizer<br>
-  Inspired by Homelab Hub and technical diagrams, now made for creating the diagrams
+  Inspired by Homelab Hub and technical diagrams, now made for creating the diagrams<br>
+  Yes this was vibecoded, I am still learning Javascript and that includes reactjs/vite
 </p>
 
 <br>
