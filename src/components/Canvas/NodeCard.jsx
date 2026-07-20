@@ -4,12 +4,12 @@ import { iconGlyphFor, resolveIcon } from '../../utils/icons.js';
 import { maskField } from '../../utils/confidential.js';
 
 // First "sub" line — a short type-level label.
-function subtitleFor(node) {
+function subtitleFor(node, confidentialMode) {
   const f = node.fields || {};
   switch (node.type) {
     case 'device': return f.model || f.os || 'No model set';
     case 'firewall': return (f.firewallOs === 'Other' ? f.firewallOsOther : f.firewallOs) || 'Firewall';
-    case 'network': return f.cidr || 'No CIDR set';
+    case 'network': return maskField('network', 'cidr', f.cidr, confidentialMode) || 'No CIDR set';
     case 'hypervisor': return f.hostOs || 'Hypervisor';
     case 'vm': return f.guestOs || 'Virtual Machine';
     case 'k8s': return `${f.nodeRole || 'Worker'} · ${f.namespace || 'default'}`;
@@ -42,7 +42,7 @@ function infoFor(node, confidentialMode) {
     case 'directory': return f.subtype === 'Symlinked Directory' ? (f.symlinkTarget || 'No symlink target') : (f.isBackupJob ? `Backup → ${f.backupTarget || '—'}` : 'Local directory');
     case 'application': return f.status || 'Unknown status';
     case 'group': return `${f.mode === 'functional' ? 'Functional' : 'Aesthetic'} group`;
-    default: return subtitleFor(node);
+    default: return subtitleFor(node, confidentialMode);
   }
 }
 
@@ -264,14 +264,11 @@ export default function NodeCard({ node, isDropTarget, dimmed, conflicted, onCon
       onPointerDown={handlePointerDown}
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu(e, node.id); }}
       onDoubleClick={(e) => { e.stopPropagation(); select(node.id); }}
-      title={`${node.name} (${node.type})\n${subtitleFor(node)}\n${infoFor(node, confidentialMode)}`}
+      title={`${node.name} (${node.type})\n${subtitleFor(node, confidentialMode)}\n${infoFor(node, confidentialMode)}`}
     >
       {conflicted && <div className="node-badge-corner" title="Port conflict">!</div>}
-      {effectivelyHidden && (
-        <div
-          className="node-hidden-overlay"
-          title={node.hidden ? 'Hidden — right-click to unhide' : 'Hidden — a parent section is hidden'}
-        >
+      {node.hidden && (
+        <div className="node-hidden-overlay" title="Hidden — right-click to unhide">
           <svg width="22" height="22" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none">
             <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" strokeLinecap="round" strokeLinejoin="round" />
             <circle cx="12" cy="12" r="3" strokeLinecap="round" strokeLinejoin="round" />
@@ -302,7 +299,7 @@ export default function NodeCard({ node, isDropTarget, dimmed, conflicted, onCon
       </div>
       {!isContainer && (
         <div className="node-body">
-          <div className="kv"><span>sub</span><b>{subtitleFor(node)}</b></div>
+          <div className="kv"><span>sub</span><b>{subtitleFor(node, confidentialMode)}</b></div>
           <div className="kv"><span>info</span><b>{infoFor(node, confidentialMode)}</b></div>
           {node.telemetry.endpoint && (
             <>
@@ -322,7 +319,7 @@ export default function NodeCard({ node, isDropTarget, dimmed, conflicted, onCon
       )}
       {isContainer && (
         <div className="node-body">
-          <div className="kv"><span>info</span><b>{subtitleFor(node)}</b></div>
+          <div className="kv"><span>info</span><b>{subtitleFor(node, confidentialMode)}</b></div>
         </div>
       )}
       <div className="node-resize-handle" onPointerDown={handleResizePointerDown} title="Drag to resize" />

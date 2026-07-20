@@ -85,6 +85,7 @@ function isAllowedParent(childType, parentType, isCustom) {
 const LEGACY_LS_KEY = 'hexlab-workspace-v1';
 const LS_INDEX_KEY = 'hexlab-projects-index-v1';
 const projectKey = (id) => `hexlab-project-${id}`;
+const CONFIDENTIAL_MODE_LS_KEY = 'hexlab-confidential-mode-v1';
 
 // ---- Server-side project storage ---------------------------------------
 // Projects are persisted on the server (server/index.cjs) so a diagram
@@ -247,10 +248,17 @@ export const useDiagramStore = create((set, get) => ({
 
   // Confidentiality Mode — display-only redaction of external
   // hostnames/IPs, internal IPs, and generated Docker Compose/K8s output.
-  // Not persisted with the project file — it's a per-session screen-share
-  // toggle, not a data change.
-  confidentialMode: false,
-  toggleConfidentialMode: () => set(s => ({ confidentialMode: !s.confidentialMode })),
+  // Not persisted with the project file — it's a browser-level screen-share
+  // toggle rather than a data change, but it is mirrored to localStorage so
+  // it survives a page reload instead of silently flipping back off.
+  confidentialMode: (() => {
+    try { return localStorage.getItem(CONFIDENTIAL_MODE_LS_KEY) === '1'; } catch { return false; }
+  })(),
+  toggleConfidentialMode: () => set(s => {
+    const next = !s.confidentialMode;
+    try { localStorage.setItem(CONFIDENTIAL_MODE_LS_KEY, next ? '1' : '0'); } catch { /* ignore */ }
+    return { confidentialMode: next };
+  }),
 
   createView: (name) => {
     const id = genId('view');

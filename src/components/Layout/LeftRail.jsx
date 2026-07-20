@@ -19,6 +19,8 @@ export default function LeftRail() {
   const toggleHierarchyEnforced = useDiagramStore(s => s.toggleHierarchyEnforced);
   const minimalUi = useDiagramStore(s => s.minimalUi);
   const toggleMinimalUi = useDiagramStore(s => s.toggleMinimalUi);
+  const confidentialMode = useDiagramStore(s => s.confidentialMode);
+  const toggleConfidentialMode = useDiagramStore(s => s.toggleConfidentialMode);
 
   const vlans = Array.from(new Set(Object.values(nodes)
     .filter(n => n.type === 'network' && n.fields.vlanId)
@@ -91,6 +93,10 @@ export default function LeftRail() {
         <div className="toggle-row" title="Icon-only canvas view — hides node detail text, keeping only the type icon and name.">
           <span className="toggle-row-label">Minimal UI</span>
           <div className={`mini-switch ${minimalUi ? 'on' : ''}`} onClick={toggleMinimalUi}><div className="knob" /></div>
+        </div>
+        <div className="toggle-row" title="Hides external hostnames/IPs, internal IPs, and generated Docker Compose/K8s output across the canvas and inspector — useful before a screen-share or screenshot.">
+          <span className="toggle-row-label">Confidentiality Mode</span>
+          <div className={`mini-switch ${confidentialMode ? 'on' : ''}`} onClick={toggleConfidentialMode}><div className="knob" /></div>
         </div>
       </div>
 

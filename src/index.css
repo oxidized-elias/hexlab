@@ -355,6 +355,44 @@ html, body, #root {
 .app-shell.minimal-ui .node-header svg { width: 22px; height: 22px; }
 .app-shell.minimal-ui .node-header .node-name { white-space: normal; font-size: 10px; }
 
+/* Container-type nodes (Group, Network, Hypervisor, ...) hold child nodes
+   visually centered inside their own box. If the container's own icon+name
+   rendered inside its card like a leaf node's, it would sit in that card's
+   stacking context — and any child positioned on top of it (children are
+   always stacked above their parent) would fully cover the label, making
+   Group boxes look like they'd vanished in Minimal UI. Same problem hits
+   the container's border: when a child sits flush against the parent's
+   edge, the child's opaque background paints right over that 1px border
+   line. So both the label and the border are hidden here and instead
+   rendered as separate, always-on-top overlays (.minimal-container-label
+   and .minimal-container-outline, added in SvgCanvas.jsx) — same look,
+   just guaranteed visible regardless of what's nested inside or how
+   tightly it's packed against the edges. */
+.app-shell.minimal-ui .node-card.container-type .node-header { visibility: hidden; }
+
+.minimal-container-outline {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid var(--nc-color, var(--c-device));
+  border-radius: var(--radius);
+  pointer-events: none;
+  z-index: 4999;
+}
+
+.minimal-container-label {
+  position: absolute;
+  transform: translate(-50%, 0);
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  gap: 4px; max-width: 85%;
+  padding-top: 8px;
+  pointer-events: none;
+  z-index: 5000;
+}
+.minimal-container-label span {
+  font-size: 10px; font-weight: 600; text-align: center;
+  color: var(--text-primary); white-space: normal;
+}
+
 .node-badge-corner {
   position: absolute; top: -7px; right: -7px; background: var(--c-alert); color: #17100a;
   font-family: var(--font-mono); font-size: 9px; font-weight: 700; border-radius: 50%;

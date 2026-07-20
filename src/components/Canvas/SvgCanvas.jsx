@@ -1,6 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
-import { useDiagramStore, rankOf } from '../../store/useDiagramStore.js';
+import { useDiagramStore, rankOf, TYPE_DEFAULTS } from '../../store/useDiagramStore.js';
 import NodeCard from './NodeCard.jsx';
+import { iconGlyphFor } from '../../utils/icons.js';
 
 function connPath(a, b) {
   const ax = a.x + a.w / 2, ay = a.y + a.h / 2;
@@ -29,6 +30,7 @@ export default function SvgCanvas() {
   const views = useDiagramStore(s => s.views);
   const activeViewId = useDiagramStore(s => s.activeViewId);
   const openContextMenu = useDiagramStore(s => s.openContextMenu);
+  const minimalUi = useDiagramStore(s => s.minimalUi);
 
   const [panning, setPanning] = useState(false);
   const [mouseWorld, setMouseWorld] = useState({ x: 0, y: 0 });
@@ -226,6 +228,14 @@ export default function SvgCanvas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes]);
 
+  // Minimal UI: containers hide their in-card label (see index.css) and get
+  // an always-on-top overlay label instead, so a nested child can never
+  // cover it. Only computed/rendered when actually needed.
+  const containerLabelNodes = useMemo(() => {
+    if (!minimalUi) return [];
+    return nodeList.filter(n => TYPE_DEFAULTS[n.type]?.container && !n.hidden);
+  }, [nodeList, minimalUi]);
+
   const pendingFromNode = pendingConnectFrom ? nodes[pendingConnectFrom] : null;
 
   return (
@@ -287,6 +297,28 @@ export default function SvgCanvas() {
             onContextMenu={(e, id) => openContextMenu(e.clientX, e.clientY, id)}
           />
         ))}
+
+        {containerLabelNodes.map(node => {
+          const def = TYPE_DEFAULTS[node.type] || {};
+          const color = node.color || def.color || '#888';
+          return (
+            <React.Fragment key={`overlay-${node.id}`}>
+              <div
+                className="minimal-container-outline"
+                style={{ left: node.x, top: node.y, width: node.w, height: node.h, '--nc-color': color }}
+              />
+              <div
+                className="minimal-container-label"
+                style={{ left: node.x + node.w / 2, top: node.y }}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" stroke={color} strokeWidth="2" fill="none">
+                  <path d={iconGlyphFor(node.type)} strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span>{node.name}</span>
+              </div>
+            </React.Fragment>
+          );
+        })}
       </div>
     </div>
   );
