@@ -89,8 +89,13 @@ export default function TopBar() {
     const a = document.createElement('a');
     a.href = url;
     a.download = 'hexlab-workspace.json';
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    // Give the browser a tick to actually start the download before the
+    // blob URL is revoked — revoking synchronously right after click() can
+    // race the download start in some browsers and silently cancel it.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
     showToast('Workspace exported');
   };
 

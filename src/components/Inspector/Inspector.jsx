@@ -1,14 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDiagramStore, TYPE_DEFAULTS } from '../../store/useDiagramStore.js';
 import { parseCompose } from '../../utils/composeParser.js';
 import { generateDockerCompose, generateK8sManifests, generateNginx, generateTraefik, generateDnsRewrite } from '../../utils/generators.js';
 import ColorPickerPopover from '../Common/ColorPickerPopover.jsx';
 import { MASK, isSensitiveField } from '../../utils/confidential.js';
+import { resolveIcon, iconGlyphFor } from '../../utils/icons.js';
 
 export function Field({ label, children }) {
   return <div className="field-group"><label className="field-label">{label}</label>{children}</div>;
 }
 
+// Small live preview for the free-text icon field below — without this,
+// typing a name gave no visible feedback at all (no thumbnail, no error),
+// so it read as if the field simply didn't do anything.
+function IconFieldPreview({ name, type, onClick }) {
+  const [state, setState] = useState({ status: 'empty', url: null });
+  useEffect(() => {
+    if (!name) { setState({ status: 'empty', url: null }); return; }
+    let cancelled = false;
+    setState({ status: 'loading', url: null });
+    resolveIcon(name).then(res => {
+      if (cancelled) return;
+      setState(res.url ? { status: 'ok', url: res.url } : { status: 'notfound', url: null });
+    });
+    return () => { cancelled = true; };
+  }, [name]);
+
+  const commonProps = { className: 'icon-field-preview', onClick, role: 'button', title: 'Click to browse icons' };
+  if (state.status === 'empty') {
+    return <span {...commonProps} title="Click to browse icons — no custom icon set, using the default type icon">
+      <svg width="16" height="16" viewBox="0 0 24 24" stroke="var(--text-dim)" strokeWidth="2" fill="none">
+        <path d={iconGlyphFor(type)} strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </span>;
+  }
+  if (state.status === 'loading') return <span {...commonProps} className="icon-field-preview rail-empty">…</span>;
+  if (state.status === 'notfound') return <span {...commonProps} style={{ color: 'var(--c-alert)' }} title={`No icon named "${name}" found — click to browse icons`}>✕</span>;
+  return <span {...commonProps}><img src={state.url} width="16" height="16" alt="" /></span>;
+}
 // Builds a best-effort URL for an IP/host string so it can be opened in a
 // new tab — adds a scheme if one isn't already present.
 function urlFor(value) {
@@ -64,9 +93,23 @@ export default function Inspector() {
   const dismissDiagnostics = useDiagramStore(s => s.dismissDiagnostics);
   const reopenDiagnostics = useDiagramStore(s => s.reopenDiagnostics);
   const confidentialMode = useDiagramStore(s => s.confidentialMode);
-  const [composeText, setComposeText] = useState('');
+  const openIconPicker = useDiagramStore(s => s.openIconPicker);
   const [genOutput, setGenOutput] = useState(null);
   const [genKind, setGenKind] = useState(null);
+
+  // The compose textarea used to be its own piece of local component state,
+  // detached from the node entirely. That caused two bugs: (1) switching
+  // between application nodes left whatever was typed for the previous
+  // node showing (and saved onto) the newly selected one, and (2) raw
+  // pasted/typed text that hadn't been run through "Parse & Auto-populate"
+  // yet was lost the moment you navigated away, since it never actually
+  // reached the store. Making the field fully controlled by the node's own
+  // fields.compose (no separate local state) fixes both at once: it can
+  // never bleed across nodes, and every keystroke is persisted immediately.
+  useEffect(() => {
+    setGenOutput(null);
+    setGenKind(null);
+  }, [node?.id]);
 
   if (!node) {
     if (diagnosticsDismissed) {
@@ -131,12 +174,11 @@ export default function Inspector() {
   const setF = (patch) => updateNodeFields(node.id, patch);
 
   const runParseCompose = () => {
-    const parsed = parseCompose(composeText);
+    const parsed = parseCompose(node.fields.compose || '');
     if (!parsed) { showToast('Could not parse compose text', 'warn'); return; }
     setF({
       port: parsed.ports.join(', ') || node.fields.port,
       image: parsed.image || node.fields.image,
-      compose: composeText,
     });
     showToast(`Parsed: ${parsed.ports.length} port(s), ${parsed.volumes.length} volume(s), ${parsed.envCount} env var(s)`);
   };
@@ -177,7 +219,10 @@ export default function Inspector() {
         </Field>
 
         <Field label="Icon (dashboard-icons name, e.g. 'plex', 'proxmox', 'jellyfin')">
-          <input className="field-input" value={node.icon || ''} onChange={e => set({ icon: e.target.value || null })} placeholder="Leave blank for default type icon" />
+          <div className="icon-field-row">
+            <input className="field-input" value={node.icon || ''} onChange={e => set({ icon: e.target.value || null })} placeholder="Leave blank for default type icon" />
+            <IconFieldPreview name={node.icon} type={node.type} onClick={() => openIconPicker(node.id)} />
+          </div>
         </Field>
 
         {/* ---- Type specific fields ---- */}
@@ -195,8 +240,8 @@ export default function Inspector() {
             <Field label="Paste docker-compose.yml or pod spec">
               <textarea
                 className="field-textarea"
-                value={confidentialMode ? MASK : composeText}
-                onChange={e => setComposeText(e.target.value)}
+                value={confidentialMode ? MASK : (node.fields.compose || '')}
+                onChange={e => setF({ compose: e.target.value })}
                 placeholder={'image: myapp:latest\nports:\n  - "8080:80"\nvolumes:\n  - /data:/app/data\nenvironment:\n  - KEY=value'}
                 disabled={confidentialMode}
                 title={confidentialMode ? 'Hidden by Confidentiality Mode' : undefined}

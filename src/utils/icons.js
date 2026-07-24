@@ -3,22 +3,35 @@
 // Falls back to a raw.githubusercontent.com mirror, then to a local static
 // glyph if both network lookups fail (e.g. offline usage).
 
-export const CDN_PRIMARY = (name) => `https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/${name}.svg`;
-export const CDN_FALLBACK = (name) => `https://raw.githubusercontent.com/homarr-labs/dashboard-icons/main/svg/${name}.svg`;
+// Primary source: raw.githubusercontent.com. jsDelivr's "/gh/" shorthand CDN
+// (used to be primary here) enforces a hard 50MB total-repo-size cap, and
+// dashboard-icons — 1800+ icons across svg/png/webp — has grown past that
+// limit, so jsDelivr now fails EVERY request against this repo with
+// "Package size exceeded the configured limit of 50 MB", not just missing
+// icons. That made icon resolution fail wholesale. raw.githubusercontent.com
+// has no such size cap, so it's the reliable primary; jsDelivr is kept as a
+// secondary attempt only (e.g. if GitHub raw itself is rate-limited).
+export const CDN_PRIMARY = (name) => `https://raw.githubusercontent.com/homarr-labs/dashboard-icons/main/svg/${name}.svg`;
+export const CDN_FALLBACK = (name) => `https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/${name}.svg`;
 
-// Full list of available icon slugs, lazily fetched once from jsDelivr's
-// package-listing API and cached in memory for the rest of the session —
-// this is what powers the searchable icon picker (type a few letters, see
-// real matching icons) instead of the old "guess the exact slug" text box.
+// Full list of available icon slugs, lazily fetched once and cached in
+// memory for the rest of the session — this is what powers the searchable
+// icon picker (type a few letters, see real matching icons) instead of the
+// old "guess the exact slug" text box. Uses the GitHub Git Trees API (the
+// same source Homarr's own icon picker uses) rather than jsDelivr's package
+// metadata API, since that data API sits behind the same 50MB repo-size
+// cap described above and was failing to list anything for this repo.
 let _allIconNamesPromise = null;
 export function getAllIconNames() {
   if (_allIconNamesPromise) return _allIconNamesPromise;
-  _allIconNamesPromise = fetch('https://data.jsdelivr.com/v1/packages/gh/homarr-labs/dashboard-icons')
+  _allIconNamesPromise = fetch('https://api.github.com/repos/homarr-labs/dashboard-icons/git/trees/main?recursive=true')
     .then(r => r.json())
     .then(data => {
-      const svgDir = (data.files || []).find(f => f.name === 'svg' && f.type === 'directory');
-      const files = svgDir?.files || [];
-      return files.filter(f => f.name.endsWith('.svg')).map(f => f.name.replace(/\.svg$/, '')).sort();
+      const tree = data.tree || [];
+      return tree
+        .filter(f => f.type === 'blob' && f.path.startsWith('svg/') && f.path.endsWith('.svg'))
+        .map(f => f.path.slice('svg/'.length, -'.svg'.length))
+        .sort();
     })
     .catch(() => []);
   return _allIconNamesPromise;

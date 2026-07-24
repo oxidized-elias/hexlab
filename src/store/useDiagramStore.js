@@ -15,7 +15,7 @@ export const TYPE_DEFAULTS = {
   firewall:    { label: 'Firewall',         color: '#EF4444', w: 220, h: 110, container: true },
   device:      { label: 'Physical Device',  color: '#71717A', w: 300, h: 190, container: true },
   hypervisor:  { label: 'Hypervisor',       color: '#8B5CF6', w: 260, h: 160, container: true },
-  vm:          { label: 'Virtual Machine',  color: '#A78BFA', w: 190, h: 100, container: false },
+  vm:          { label: 'Virtual Machine',  color: '#F9F06B', w: 190, h: 100, container: false },
   k8s:         { label: 'Kubernetes Host',  color: '#8B5CF6', w: 260, h: 150, container: true },
   docker:      { label: 'Docker Host',      color: '#00E5FF', w: 240, h: 140, container: true },
   storage:     { label: 'Storage',          color: '#F59E0B', w: 180, h: 100, container: false },
@@ -48,11 +48,22 @@ export const HIERARCHY_RULES = {
   // A perimeter firewall appliance — sits at the same level as a Physical
   // Device (usually just inside a Network or at the top level).
   firewall:    { root: true,  parents: ['group', 'network', 'device', 'hypervisor', 'vm'] },
-  device:      { root: true,  parents: ['group', 'network'] },
+  // Normally a Physical Device only sits inside a Group or Network. The one
+  // exception is Hypervisor: dropping a device there is how you convert it
+  // into a Virtual Machine (see autoConvertDeviceVm in reparentNode) — so
+  // 'hypervisor' has to be an allowed parent here, or hierarchy enforcement
+  // rejects the drop before that conversion logic ever gets a chance to run.
+  device:      { root: true,  parents: ['group', 'network', 'hypervisor'] },
   // A Hypervisor is software running on a physical box — it must sit
   // directly inside a Physical Device, never floating at the top level.
   hypervisor:  { root: false, parents: ['device'] },
-  vm:          { root: false, parents: ['hypervisor'] },
+  // A VM normally lives inside a Hypervisor, but it also needs to be
+  // droppable at the top level or into a Group/Network — that's how you
+  // pull it back out, which converts it back into a Physical Device (see
+  // autoConvertDeviceVm). Without root/group/network allowed here, that
+  // unparenting move would itself be rejected by hierarchy enforcement
+  // before the reverse conversion ever got a chance to run.
+  vm:          { root: true,  parents: ['hypervisor', 'group', 'network'] },
   // Kubernetes/Docker hosts are compute runtimes: they need to ultimately
   // live on a Physical Device, either bare-metal or virtualized (VM/Hypervisor).
   k8s:         { root: false, parents: ['device', 'hypervisor', 'vm'] },
@@ -535,18 +546,44 @@ export const useDiagramStore = create((set, get) => ({
     const state = get();
     const dragged = state.nodes[id];
     const excluded = new Set([id, ...get().getDescendantIds(id)]);
+    // A small tolerance margin applied only to the node's *current* parent,
+    // so ending a drag just barely outside the container's edge — easy to
+    // do with normal mouse imprecision, or while a container is still
+    // settling its own size — doesn't silently and unexpectedly unlink the
+    // node. Other candidate containers are unaffected and still require the
+    // point to be properly inside them.
+    const STICKY_MARGIN = 30;
     let best = null, bestArea = Infinity;
     Object.values(state.nodes).forEach(n => {
       if (excluded.has(n.id)) return;
       const def = TYPE_DEFAULTS[n.type];
       if (!def?.container) return;
       if (state.hierarchyEnforced && dragged && !isAllowedParent(dragged.type, n.type, !!dragged.customTypeId)) return;
-      if (cx >= n.x && cx <= n.x + n.w && cy >= n.y && cy <= n.y + n.h) {
+      const margin = (dragged && n.id === dragged.parentId) ? STICKY_MARGIN : 0;
+      if (cx >= n.x - margin && cx <= n.x + n.w + margin && cy >= n.y - margin && cy <= n.y + n.h + margin) {
         const area = n.w * n.h;
         if (area < bestArea) { bestArea = area; best = n.id; }
       }
     });
     return best;
+  },
+
+  // Deliberate one-click "pop this out" action for the right-click menu —
+  // moves the node just past its current parent's edge (by a single grid
+  // unit) and detaches it, rather than requiring a drag.
+  unlinkFromParent: (id) => {
+    const state = get();
+    const node = state.nodes[id];
+    if (!node || !node.parentId) return;
+    const parent = state.nodes[node.parentId];
+    get().snapshotForUndo();
+    if (parent) {
+      const STEP = 20;
+      set(s => ({ nodes: { ...s.nodes, [id]: { ...s.nodes[id], x: parent.x + parent.w + STEP, y: parent.y } } }));
+    }
+    get().reparentNode(id, null);
+    get().growParentToFit(node.parentId);
+    get().showToast(`${node.name} unlinked from ${parent?.name || 'its parent'}`);
   },
 
   reparentNode: (id, newParentId) => {
@@ -716,19 +753,50 @@ export const useDiagramStore = create((set, get) => ({
         return;
       }
 
-      const cols = Math.max(1, Math.ceil(Math.sqrt(freshKids.length)));
-      let x = n.x + PAD, y = n.y + HEADER + PAD, rowH = 0, col = 0;
-      let maxX = x, maxY = y;
-      const updates = {};
-      freshKids.forEach(k => {
-        updates[k.id] = { x: snap(x), y: snap(y) };
-        maxX = Math.max(maxX, x + k.w);
-        rowH = Math.max(rowH, k.h);
-        maxY = Math.max(maxY, y + k.h);
-        col++;
-        x += k.w + GAP;
-        if (col >= cols) { col = 0; x = n.x + PAD; y += rowH + GAP; rowH = 0; }
+      // Pack children shelf-style: walk them left to right, wrapping to a
+      // new row once the row would exceed a target width. Unlike a fixed
+      // column count, this respects each child's actual width — a short,
+      // narrow node (e.g. a Storage box) naturally lands *beside* a taller
+      // one (e.g. a Docker Host full of its own app children) on the same
+      // row instead of being forced above/below it just because they don't
+      // share a column grid. Try a spread of target row widths (breakpoints
+      // at natural running-width totals) and keep whichever produces a
+      // bounding box closest to a square.
+      const packShelf = (targetWidth) => {
+        const rowStartX = n.x + PAD;
+        let x = rowStartX, y = n.y + HEADER + PAD, rowH = 0;
+        let maxX = x, maxY = y;
+        const positions = {};
+        freshKids.forEach(k => {
+          if (x > rowStartX && (x + k.w) > rowStartX + targetWidth) {
+            x = rowStartX;
+            y += rowH + GAP;
+            rowH = 0;
+          }
+          positions[k.id] = { x: snap(x), y: snap(y) };
+          maxX = Math.max(maxX, x + k.w);
+          rowH = Math.max(rowH, k.h);
+          maxY = Math.max(maxY, y + k.h);
+          x += k.w + GAP;
+        });
+        return { positions, w: maxX - n.x + PAD, h: maxY - n.y + PAD };
+      };
+      // Candidate row widths: the running total width (+gaps) after each
+      // child, i.e. every point where a natural row boundary could sit —
+      // plus one single-row candidate covering everything.
+      let running = 0, best = null;
+      const candidates = [];
+      freshKids.forEach((k, i) => {
+        running += k.w + (i > 0 ? GAP : 0);
+        candidates.push(running);
       });
+      candidates.forEach(targetWidth => {
+        const candidate = packShelf(targetWidth);
+        const aspectDelta = Math.abs(Math.log(candidate.w / candidate.h));
+        if (!best || aspectDelta < best.aspectDelta) best = { ...candidate, aspectDelta };
+      });
+      const updates = best.positions;
+      const maxX = best.w + n.x - PAD, maxY = best.h + n.y - PAD;
       set(s => {
         const nodes = { ...s.nodes };
         Object.entries(updates).forEach(([kid, pos]) => { nodes[kid] = { ...nodes[kid], ...pos }; });

@@ -284,7 +284,7 @@ export default function NodeCard({ node, isDropTarget, dimmed, conflicted, onCon
           title="Click to set a custom icon"
         >
           {iconUrl ? (
-            <img src={iconUrl} width="12" height="12" alt="" className="node-icon-img" draggable={false} onError={() => setIconUrl(null)} />
+            <img src={iconUrl} width="12" height="12" alt="" className="node-icon-img" draggable={false} crossOrigin="anonymous" onError={() => setIconUrl(null)} />
           ) : (
             <svg width="12" height="12" viewBox="0 0 24 24" stroke={color} strokeWidth="2" fill="none">
               <path d={iconGlyphFor(node.type)} strokeLinecap="round" strokeLinejoin="round" />

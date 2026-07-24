@@ -270,8 +270,6 @@ html, body, #root {
   position: absolute;
   top: 0; left: 0;
   transform-origin: 0 0;
-  width: 8000px;
-  height: 6000px;
 }
 
 .canvas-svg-layer { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
@@ -280,7 +278,7 @@ html, body, #root {
 .node-card {
   position: absolute;
   border-radius: var(--radius);
-  border: 1px solid var(--nc-color, var(--c-device));
+  border: calc(1px / var(--zoom, 1)) solid var(--nc-color, var(--c-device));
   background: linear-gradient(155deg, var(--bg-panel-alt), var(--bg-panel));
   color: var(--text-primary);
   cursor: move;
@@ -302,7 +300,7 @@ html, body, #root {
 .node-header {
   display: flex; align-items: center; gap: 6px;
   padding: 7px 9px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: calc(1px / var(--zoom, 1)) solid rgba(255,255,255,0.06);
   font-size: 11px; font-weight: 600; letter-spacing: 0.01em;
 }
 .node-header svg, .node-header .node-icon-img { flex-shrink: 0; object-fit: contain; }
@@ -324,8 +322,12 @@ html, body, #root {
   display: flex; flex-direction: column; gap: 2px;
   overflow: hidden;
 }
-.node-body .kv { display: flex; justify-content: space-between; gap: 6px; }
-.node-body .kv b { color: var(--text-primary); font-weight: 500; }
+.node-body .kv { display: flex; justify-content: space-between; gap: 6px; min-width: 0; }
+.node-body .kv span { flex-shrink: 0; }
+.node-body .kv b {
+  color: var(--text-primary); font-weight: 500;
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 .node-sparkline { display: flex; gap: 4px; margin-top: 3px; }
 .spark-bar { flex: 1; height: 3px; background: var(--border-hair-bright); border-radius: 2px; overflow: hidden; }
@@ -461,6 +463,15 @@ html, body, #root {
 .field-checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-secondary); }
 .ip-field-row { display: flex; gap: 6px; align-items: center; }
 .ip-field-row .field-input { flex: 1; }
+.icon-field-row { display: flex; gap: 6px; align-items: center; }
+.icon-field-row .field-input { flex: 1; }
+.icon-field-preview {
+  flex-shrink: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  background: var(--bg-panel-alt); border: 1px solid var(--border-hair-bright); border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.icon-field-preview:hover { border-color: var(--accent); }
+.icon-field-preview img { object-fit: contain; }
 
 .inspector-section-title {
   font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-secondary);
@@ -530,6 +541,13 @@ html, body, #root {
   position: fixed; inset: 0; background: rgba(3,6,5,0.7); z-index: 4000;
   display: flex; align-items: center; justify-content: center; backdrop-filter: blur(3px);
 }
+/* The icon picker can be opened from inside another already-open modal
+   (Edit Node's "Choose Icon…" button) without that modal closing first, so
+   both backdrops end up mounted at once. Relying on DOM order alone to
+   decide which one paints on top is fragile — give the icon picker an
+   explicit, higher z-index so its icons are always visible and clickable
+   regardless of where it was triggered from. */
+.modal-backdrop.icon-picker-backdrop { z-index: 4700; }
 .modal-panel {
   background: var(--bg-panel); border: 1px solid var(--border-hair-bright); border-radius: var(--radius-lg);
   width: 560px; max-width: 92vw; max-height: 84vh; overflow-y: auto; box-shadow: var(--shadow);

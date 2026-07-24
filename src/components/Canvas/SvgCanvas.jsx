@@ -149,6 +149,24 @@ export default function SvgCanvas() {
     return () => window.removeEventListener('keydown', esc);
   }, [connectMode]);
 
+  // Space normally scrolls the page in most browsers. If the user reflexively
+  // hits Space while holding/dragging a node, that page scroll shifts the
+  // viewport under the still-active pointermove listeners without any real
+  // pointer movement — which can push the node far enough that it lands
+  // outside its parent's bounds and gets unparented (unlinked) on drop.
+  // Suppress the default scroll whenever focus isn't on a text input, same
+  // guard used for the Delete/Backspace handler below.
+  useEffect(() => {
+    const onSpace = (e) => {
+      if (e.key !== ' ' && e.code !== 'Space') return;
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement?.isContentEditable) return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onSpace);
+    return () => window.removeEventListener('keydown', onSpace);
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.key !== 'Delete' && e.key !== 'Backspace') return;
@@ -236,6 +254,25 @@ export default function SvgCanvas() {
     return nodeList.filter(n => TYPE_DEFAULTS[n.type]?.container && !n.hidden);
   }, [nodeList, minimalUi]);
 
+  // The world/SVG layer used to be a fixed 8000x6000 regardless of the
+  // actual diagram — fine for small workspaces, but a large or far-flung
+  // one (many nodes spread wide apart) could exceed that box, and an SVG's
+  // declared width/height doubles as its clipping viewport in some browsers
+  // even with CSS overflow:visible set. Zooming out far enough to reveal
+  // those out-of-bounds coordinates would then show connections/nodes
+  // getting cut off at the 8000x6000 edge. Compute real content bounds
+  // (with generous padding) and never size the world smaller than before.
+  const worldBounds = useMemo(() => {
+    const list = Object.values(nodes);
+    let maxX = 8000, maxY = 6000;
+    list.forEach(n => {
+      maxX = Math.max(maxX, n.x + n.w);
+      maxY = Math.max(maxY, n.y + n.h);
+    });
+    const PAD = 2000;
+    return { w: Math.ceil(maxX + PAD), h: Math.ceil(maxY + PAD) };
+  }, [nodes]);
+
   const pendingFromNode = pendingConnectFrom ? nodes[pendingConnectFrom] : null;
 
   return (
@@ -254,9 +291,9 @@ export default function SvgCanvas() {
     >
       <div
         className="canvas-world"
-        style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
+        style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, width: worldBounds.w, height: worldBounds.h, '--zoom': zoom }}
       >
-        <svg className="canvas-svg-layer" width="8000" height="6000">
+        <svg className="canvas-svg-layer" width={worldBounds.w} height={worldBounds.h} style={{ overflow: 'visible' }}>
           <defs>
             <filter id="glow-cyan" x="-50%" y="-50%" width="200%" height="200%">
               <feGaussianBlur stdDeviation="3" result="blur" />

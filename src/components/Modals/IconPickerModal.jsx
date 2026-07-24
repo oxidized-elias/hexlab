@@ -41,6 +41,15 @@ export default function IconPickerModal() {
   }, [iconPickerNodeId]);
 
   useEffect(() => {
+    if (!iconPickerNodeId) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') closeIconPicker();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [iconPickerNodeId, closeIconPicker]);
+
+  useEffect(() => {
     let cancelled = false;
     setLoading(true);
     searchIcons(query).then(names => { if (!cancelled) { setResults(names); setLoading(false); } });
@@ -54,7 +63,7 @@ export default function IconPickerModal() {
   const shown = results.slice(0, RENDER_CAP);
 
   return (
-    <div className="modal-backdrop" onClick={closeIconPicker}>
+    <div className="modal-backdrop icon-picker-backdrop" onClick={closeIconPicker}>
       <div className="modal-panel" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title">Set Icon — {node.name}</div>
