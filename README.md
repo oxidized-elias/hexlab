@@ -73,6 +73,9 @@ Data is stored under UserData in the app's root. UserData is git-ignored so note
 
 ## Application Security?
 That's the neat part, there is none. Application security is expected to be managed by the user in its entirely. You can use something like Cloudflare Zero Trust to handle that.
+
+## I want to modify the hierarchy of nodes
+Under`src/store/useDiagramStore.js` in the project root should allow you to customize the hierarchy. This is only recommended if you did not install from the GitHub Container Registry
 <br>
 
 ## Credits
