@@ -15,7 +15,10 @@ export const TYPE_DEFAULTS = {
   firewall:    { label: 'Firewall',         color: '#EF4444', w: 220, h: 110, container: true },
   device:      { label: 'Physical Device',  color: '#71717A', w: 300, h: 190, container: true },
   hypervisor:  { label: 'Hypervisor',       color: '#8B5CF6', w: 260, h: 160, container: true },
-  vm:          { label: 'Virtual Machine',  color: '#F9F06B', w: 190, h: 100, container: false },
+  // container:true — an LXC container or VM is a very normal place to run
+  // its own Docker Host or Kubernetes Host (hierarchy rules already allowed
+  // this parenting; it just couldn't happen because this flag said no).
+  vm:          { label: 'Virtual Machine',  color: '#F9F06B', w: 190, h: 100, container: true },
   k8s:         { label: 'Kubernetes Host',  color: '#8B5CF6', w: 260, h: 150, container: true },
   docker:      { label: 'Docker Host',      color: '#00E5FF', w: 240, h: 140, container: true },
   storage:     { label: 'Storage',          color: '#F59E0B', w: 180, h: 100, container: false },
@@ -28,7 +31,7 @@ export const TYPE_DEFAULTS = {
   application: { label: 'Application',      color: '#10B981', w: 180, h: 80,  container: false },
 };
 
-const CONTAINER_TYPES = new Set(['group', 'network', 'device', 'hypervisor', 'k8s', 'docker', 'storagepool', 'firewall']);
+const CONTAINER_TYPES = new Set(['group', 'network', 'device', 'hypervisor', 'vm', 'k8s', 'docker', 'storagepool', 'firewall']);
 
 // ---- Hierarchy / order-sensitivity rules -------------------------------
 // Defines which node types are logically allowed to sit inside which parent
