@@ -67,7 +67,8 @@ Other scripts:
 | `npm run lint` | Run oxlint |
 
 <br>
-### FAQ
+
+# FAQ
 ## Data Storage
 Data is stored under UserData in the app's root. UserData is git-ignored so note that in the case you are backing up. The application will also back it up to the user's cookies every once in a while. You can also export data from the project
 
