@@ -66,7 +66,6 @@ Other scripts:
 | `npm run preview` | Preview the production build |
 | `npm run lint` | Run oxlint |
 
-<br>
 
 # FAQ
 ## Data Storage
