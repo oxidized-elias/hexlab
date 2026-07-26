@@ -20,6 +20,7 @@
 * Live telemetry polling for nodes with a configured endpoint
 * Multiple projects, each with its own saved diagram
 * Hiding Information for exports, streams, or recordings
+* Linking of nodes for special cases
 
 ## Getting Started
 ### GitHub Container Registry (Recommended):
@@ -65,11 +66,13 @@ Other scripts:
 | `npm run preview` | Preview the production build |
 | `npm run lint` | Run oxlint |
 
+<br>
+### FAQ
 ## Data Storage
+Data is stored under UserData in the app's root. UserData is git-ignored so note that in the case you are backing up. The application will also back it up to the user's cookies every once in a while. You can also export data from the project
 
-Projects are persisted to disk by the storage server under `UserData/` at the project root (`UserData/index.json` for the project list, `UserData/projects/<id>.json` for each diagram). This folder is created automatically on first run and is git-ignored.
-
-For a production deploy, run `npm run build` followed by `npm run server` — the storage server also serves the built frontend, so it's a single process.
+## Application Security?
+That's the neat part, there is none. Application security is expected to be managed by the user in its entirely. You can use something like Cloudflare Zero Trust to handle that.
 <br>
 
 ## Credits
