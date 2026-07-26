@@ -326,6 +326,7 @@ html, body, #root {
 }
 .node-header .node-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .node-header .status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: var(--text-dim); }
+.node-header .network-link-badge { flex-shrink: 0; display: flex; align-items: center; opacity: 0.85; }
 .node-header .status-dot.online { background: var(--c-application); box-shadow: 0 0 5px var(--c-application); }
 .node-header .status-dot.offline { background: var(--c-alert); box-shadow: 0 0 5px var(--c-alert); }
 

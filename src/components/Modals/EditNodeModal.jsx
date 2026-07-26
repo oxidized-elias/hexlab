@@ -11,6 +11,7 @@ export default function EditNodeModal() {
   const editNodeId = useDiagramStore(s => s.editNodeId);
   const closeEditNode = useDiagramStore(s => s.closeEditNode);
   const node = useDiagramStore(s => (editNodeId ? s.nodes[editNodeId] : null));
+  const parent = useDiagramStore(s => (node?.parentId ? s.nodes[node.parentId] : null));
   const updateNode = useDiagramStore(s => s.updateNode);
   const updateNodeFields = useDiagramStore(s => s.updateNodeFields);
   const openIconPicker = useDiagramStore(s => s.openIconPicker);
@@ -51,7 +52,7 @@ export default function EditNodeModal() {
           </div>
           <div>
             <div className="inspector-section-title" style={{ marginTop: 0 }}>Configuration</div>
-            <TypeFields node={node} setF={setF} />
+            <TypeFields node={node} setF={setF} parent={parent} />
           </div>
         </div>
         <div className="modal-footer">

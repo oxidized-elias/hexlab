@@ -144,7 +144,7 @@ function defaultFieldsFor(type) {
     case 'hypervisor':
       return { hostOs: 'Proxmox VE', totalCpu: '', totalRam: '', guestCpu: '', guestRam: '' };
     case 'vm':
-      return { guestOs: '', vCpu: '', vRam: '', ip: '', hostPorts: '', diskSize: '' };
+      return { guestType: 'VM', guestOs: '', vCpu: '', vRam: '', ip: '', hostPorts: '', diskSize: '' };
     case 'k8s':
       return { nodeRole: 'Worker', namespace: 'default', podCidr: '', apiEndpoint: '', cpuLimit: '', memLimit: '' };
     case 'docker':

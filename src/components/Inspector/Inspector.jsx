@@ -227,7 +227,7 @@ export default function Inspector() {
 
         {/* ---- Type specific fields ---- */}
         <div className="inspector-section-title">Configuration</div>
-        <TypeFields node={node} setF={setF} confidentialMode={confidentialMode} />
+        <TypeFields node={node} setF={setF} confidentialMode={confidentialMode} parent={parent} />
 
         {/* ---- Telemetry ---- */}
         <div className="inspector-section-title">Live Telemetry</div>
@@ -304,7 +304,7 @@ export default function Inspector() {
 }
 
 
-export function TypeFields({ node, setF, confidentialMode }) {
+export function TypeFields({ node, setF, confidentialMode, parent }) {
   const f = node.fields;
   const locked = (key) => confidentialMode && isSensitiveField(node.type, key);
   const mv = (key, value) => locked(key) ? MASK : value;
@@ -384,9 +384,18 @@ export function TypeFields({ node, setF, confidentialMode }) {
           </div>
         </>
       );
-    case 'vm':
+    case 'vm': {
+      const isProxmoxHost = (parent?.type === 'hypervisor') && /proxmox/i.test(parent?.fields?.hostOs || '');
       return (
         <>
+          {isProxmoxHost && (
+            <Field label="Guest Type">
+              <select className="field-select" value={f.guestType || 'VM'} onChange={e => setF({ guestType: e.target.value })}>
+                <option value="VM">VM</option>
+                <option value="LXC">LXC Container</option>
+              </select>
+            </Field>
+          )}
           <Field label="Guest OS">
             <input className="field-input" list="os-list" value={f.guestOs} onChange={e => setF({ guestOs: e.target.value })} />
             <datalist id="os-list">
@@ -404,6 +413,7 @@ export function TypeFields({ node, setF, confidentialMode }) {
           <Field label="Mapped Host Ports (comma sep)"><input className="field-input" value={f.hostPorts} onChange={e => setF({ hostPorts: e.target.value })} placeholder="8080:80, 443:443" /></Field>
         </>
       );
+    }
     case 'k8s':
       return (
         <>

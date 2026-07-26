@@ -3,6 +3,14 @@ import { useDiagramStore, TYPE_DEFAULTS } from '../../store/useDiagramStore.js';
 import { iconGlyphFor, resolveIcon } from '../../utils/icons.js';
 import { maskField } from '../../utils/confidential.js';
 
+// The small badge in the header — normally just the node's type, but a
+// Proxmox VM node can be flagged as an LXC container instead, which is
+// functionally a different guest type worth surfacing at a glance.
+function typeTagFor(node) {
+  if (node.type === 'vm' && node.fields?.guestType === 'LXC') return 'lxc';
+  return node.type;
+}
+
 // First "sub" line — a short type-level label.
 function subtitleFor(node, confidentialMode) {
   const f = node.fields || {};
@@ -11,7 +19,7 @@ function subtitleFor(node, confidentialMode) {
     case 'firewall': return (f.firewallOs === 'Other' ? f.firewallOsOther : f.firewallOs) || 'Firewall';
     case 'network': return maskField('network', 'cidr', f.cidr, confidentialMode) || 'No CIDR set';
     case 'hypervisor': return f.hostOs || 'Hypervisor';
-    case 'vm': return f.guestOs || 'Virtual Machine';
+    case 'vm': return f.guestOs || (f.guestType === 'LXC' ? 'LXC Container' : 'Virtual Machine');
     case 'k8s': return `${f.nodeRole || 'Worker'} · ${f.namespace || 'default'}`;
     case 'docker': return f.networkMode || 'bridge';
     case 'storage': return f.subtype || 'Storage';
@@ -47,8 +55,38 @@ function infoFor(node, confidentialMode) {
 }
 
 
+// Physical Devices already live inside a real Network container, so their
+// network membership is just normal containment — no indicator needed there.
+// Hypervisors are different: a cluster of hypervisors doesn't get modeled as
+// nested boxes, it gets modeled by linking the Hypervisor nodes to each
+// other with the Link Tool, and every VM/LXC guest across that whole
+// cluster implicitly shares one network as a result. This walks the chain
+// of hypervisor<->hypervisor links radiating out from a given hypervisor
+// and returns every other hypervisor reachable that way (i.e. its cluster).
+function hypervisorCluster(hypervisorId, nodes, connections) {
+  const visited = new Set([hypervisorId]);
+  const queue = [hypervisorId];
+  while (queue.length) {
+    const current = queue.shift();
+    for (const c of Object.values(connections)) {
+      if (c.kind !== 'link') continue;
+      if (c.from !== current && c.to !== current) continue;
+      const otherId = c.from === current ? c.to : c.from;
+      if (visited.has(otherId)) continue;
+      const other = nodes[otherId];
+      if (other?.type === 'hypervisor') {
+        visited.add(otherId);
+        queue.push(otherId);
+      }
+    }
+  }
+  visited.delete(hypervisorId);
+  return visited; // Set of peer hypervisor ids, empty if unclustered
+}
+
 export default function NodeCard({ node, isDropTarget, dimmed, conflicted, onContextMenu }) {
   const nodes = useDiagramStore(s => s.nodes);
+  const connections = useDiagramStore(s => s.connections);
   const confidentialMode = useDiagramStore(s => s.confidentialMode);
   const selectedIds = useDiagramStore(s => s.selectedIds);
   const select = useDiagramStore(s => s.select);
@@ -76,6 +114,14 @@ export default function NodeCard({ node, isDropTarget, dimmed, conflicted, onCon
   const isContainer = def.container;
 
   const offline = !!node.telemetry.endpoint && node.telemetry.status === 'offline';
+  const parentHypervisor = node.type === 'vm' && node.parentId && nodes[node.parentId]?.type === 'hypervisor'
+    ? nodes[node.parentId]
+    : null;
+  const clusterSubjectId = node.type === 'hypervisor' ? node.id : parentHypervisor?.id;
+  const clusterPeers = clusterSubjectId ? hypervisorCluster(clusterSubjectId, nodes, connections) : null;
+  const clusterPeerNames = clusterPeers && clusterPeers.size > 0
+    ? [...clusterPeers].map(id => nodes[id]?.name).filter(Boolean)
+    : null;
 
   const handlePointerDown = (e) => {
     e.stopPropagation();
@@ -291,8 +337,21 @@ export default function NodeCard({ node, isDropTarget, dimmed, conflicted, onCon
             </svg>
           )}
         </span>
-        <span className="type-tag" style={{ color }}>{node.type}</span>
+        <span className="type-tag" style={{ color }}>{typeTagFor(node)}</span>
         <span className="node-name">{node.name}</span>
+        {clusterPeerNames && (
+          <span
+            className="network-link-badge"
+            title={`Shared cluster network with ${clusterPeerNames.join(', ')}`}
+          >
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--c-network)" strokeWidth="2.5">
+              <circle cx="5" cy="19" r="2.2" fill="var(--c-network)" stroke="none" />
+              <circle cx="19" cy="19" r="2.2" fill="var(--c-network)" stroke="none" />
+              <circle cx="12" cy="5" r="2.2" fill="var(--c-network)" stroke="none" />
+              <path d="M12 7.2V12M12 12H5v4.8M12 12h7v4.8" strokeLinecap="round" />
+            </svg>
+          </span>
+        )}
         {node.telemetry.endpoint && (
           <span className={`status-dot ${node.telemetry.status === 'online' ? 'online' : node.telemetry.status === 'offline' ? 'offline' : ''}`} />
         )}
