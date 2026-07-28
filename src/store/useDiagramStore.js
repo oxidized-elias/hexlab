@@ -70,7 +70,7 @@ export const HIERARCHY_RULES = {
   // Kubernetes/Docker hosts are compute runtimes: they need to ultimately
   // live on a Physical Device, either bare-metal or virtualized (VM/Hypervisor).
   k8s:         { root: false, parents: ['device', 'hypervisor', 'vm'] },
-  docker:      { root: false, parents: ['device', 'hypervisor', 'vm', 'k8s'] },
+  docker:      { root: false, parents: ['device', 'hypervisor', 'vm', 'k8s', 'firewall'] },
   storage:     { root: true,  parents: ['group', 'network', 'device', 'hypervisor', 'vm', 'storagepool'] },
   storagepool: { root: true,  parents: ['group', 'network', 'device', 'hypervisor', 'vm'] },
   directory:   { root: true,  parents: ['group', 'network', 'device', 'hypervisor', 'vm', 'storage', 'storagepool'] },
